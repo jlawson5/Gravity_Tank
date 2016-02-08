@@ -10,11 +10,11 @@
 
 function preload() {
 
-    game.load.tilemap('level1', './assets/level1.json', null, Phaser.Tilemap.TILED_JSON);
-    game.load.image('tiles-1', './assets/tiles-1.png');
-    game.load.spritesheet('gravityMan', './assets/GravityMan.png', 32, 32);//Gravity Man: The player character//
-    game.load.image('coin', './assets/GravityManCoin.png');//Coins the player must find and collect//
-    game.load.image('background', './assets/GravityManBG.png');//Background image//
+    game.load.tilemap('level1', 'assets/level1.json', null, Phaser.Tilemap.TILED_JSON);
+    game.load.image('tiles-1', 'assets/tiles-1.png');
+    game.load.spritesheet('gravityMan', 'assets/GravityMan.png', 32, 32);//Gravity Man: The player character//
+    game.load.image('coin', 'assets/GravityManCoin.png');//Coins the player must find and collect//
+    game.load.image('background', 'assets/GravityManBG.png');//Background image//
 
 }
 
