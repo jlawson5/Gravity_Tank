@@ -11,7 +11,7 @@
 function preload() {
 
     game.load.tilemap('level1', '../assets/level1.json', null, Phaser.Tilemap.TILED_JSON);
-    game.load.image('tiles-1', '../assets/GravityManBlock.png');
+    game.load.image('tiles-1', '../assets/tiles-1.png');
     game.load.spritesheet('gravityMan', '../assets/GravityMan.png', 32, 32);//Gravity Man: The player character//
     game.load.image('coin', '../assets/GravityManCoin.png');//Coins the player must find and collect//
     game.load.image('background', '../assets/GravityManBG.png');//Background image//
@@ -53,6 +53,7 @@ function create() {
     game.physics.arcade.gravity.y = 250;
 
     player = game.add.sprite(32, 32, 'gravityMan');
+    game.add.sprite(0, 0, 'background')
     game.physics.enable(player, Phaser.Physics.ARCADE);
 
     player.body.bounce.y = 0.2;
