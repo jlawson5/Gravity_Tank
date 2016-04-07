@@ -1,200 +1,328 @@
     ///////////////////////////////////////////////////////////////
-    //Game: Gravity Man - Justin Lawson                          //
-    //Sources: Code from Phaser example "Starstruck" used        //
-    //         Tilemap file from Phaser example "Starstruck" used//
+    //Game: Gravity Tank - Justin Lawson                         //
     ///////////////////////////////////////////////////////////////
 
     window.onload = function() {
 
-        var game = new Phaser.Game(600, 600, Phaser.CANVAS, 'phaser-example', { preload: preload, create: create, update: update, render: render });
+        var game = new Phaser.Game(640, 640, Phaser.CANVAS, 'game', { preload: preload, create: create, update: update, render: render });
 
 function preload() {
 
-    game.load.image('platform', 'assets/GravityManPlatform.png');//Floor and Platform objects are not working properly//
-    game.load.image('floor', 'assets/GravityManFloor.png');
-    game.load.spritesheet('gravityMan', 'assets/GravityMan.png', 32, 32);//Gravity Man: The player character//
-    game.load.image('coin', 'assets/GravityManCoin.png');//Coins the player must find and collect//
-    game.load.image('background', 'assets/GravityManBG.png');//Background image//
-    game.load.audio('coinCollect', 'assets/Electronic_Chime-KevanGC-495939803.mp3');
-    game.load.audio('gravityChange', 'assets/spin_jump-Brandino480-2020916281.mp3');
+    game.load.image('base', 'assets/tank.png');//tank base//
+    game.load.image('cannon', 'assets/cannon.png');//tank cannon//
+    game.load.image('bullet', 'assets/bullet.png');//bullet sprite//
+    game.load.tilemap('Tilemap', 'assets/Tile Layer 1.json', null, Phaser.Tilemap.TILED_JSON);
+    game.load.image('Blocks', 'assets/block.png');//block used for Tilemap//
+    game.load.image('turretW', 'assets/wallTurret.png');//enemy turret on wall//
+    game.load.image('turretF', 'assets/groundTurret.png');//enemy turret on ground//
+    game.load.audio('shot', 'assets/9_mm_gunshot-mike-koenig-123.mp3');
+    game.load.audio('hit', 'assets/Bomb 2-SoundBible.com-953367492.mp3');
+    game.load.audio('music', 'assets/Voice Over Under.mp3');
 }
 
 var player;
+var cannon;
 var facing = 'left';
-var jumpTimer = 0;
 var cursors;
-var jumpButton;
+var shootButton;
 var bg;
-var g_dir = 'down';//current direction of gravity//
-var coinSound;
-var gSound;
-var coins;
-var score = 0;
-var scoreString = '';
-var scoreText;
-var floor;//Not working//
+var g_dir = 'down';
+var layer;
+var map;
+var upGrav;
+var downGrav;
+var leftGrav;
+var rightGrav;
+var onGround = false;
+var turnCW;
+var turnCCW;
+var bullets;
+var bulletTimer = 0;
+var startKey;
+var isRunning = false;
+var stateText;
+var healthText;
+var enemies;
+var enemy1;//wall turret//
+var enemy2;//ground turret//
+var enemy3;//ground turret//
+var enemyTimer = 0;//timer for enemy attacks//
+var enemyBullets;
+var playerHealth = 3;
+var shootSFX;
+var hitSFX;
+var music;
 
 function create() {
 
     game.physics.startSystem(Phaser.Physics.ARCADE);
 
-    game.stage.backgroundColor = '#000000';
-
-    bg = game.add.tileSprite(0, 0, 800, 600, 'background');
-    bg.fixedToCamera = true;
+    game.stage.backgroundColor = '#555555';
 
     game.physics.arcade.gravity.y = 250;
     
-    //adds sounds to the game//
-    coinSound = game.add.audio('coinCollect');
-    gSound = game.add.audio('gravityChange');
-    coinSound.allowMultiple = true;
-    gSound.allowMultiple = true;
-    coinSound.addMarker('coinGet', 0, 2.0);
-    gSound.addMarker('gSwitch', 0, 0.5);
+    map = game.add.tilemap('Tilemap');
+    map.addTilesetImage('Blocks');
+    map.setCollision(1);
+    
+    layer = map.createLayer('Tile Layer 1');
+    layer.resizeWorld();
 
-    player = game.add.sprite(32, 32, 'gravityMan');
+    player = game.add.sprite(32, 96, 'base');
     game.physics.enable(player, Phaser.Physics.ARCADE);
+    
+    cannon = game.add.sprite(32, 96, 'cannon');
+    game.physics.enable(cannon, Phaser.Physics.ARCADE);
 
-    player.body.bounce.y = 0.2;
     player.body.collideWorldBounds = true;
-    player.body.setSize(16, 32, 8, 0);
-
-    player.animations.add('left', [2, 3], 10, true);
-    player.animations.add('right', [0, 1], 10, true);
-    player.animations.add('left_up', [6, 7], 10, true);//player is facing left and gravity is up//
-    player.animations.add('right_up', [4, 5], 10, true);//player is facing right and gravity is up//
+    player.body.setSize(32, 32, 0, 0);
+    player.body.drag.set(100);
     
-    coins = game.add.group();
-    createCoins();
+    cannon.body.collideWorldBounds = true;
+    cannon.body.setSize(32, 32, 0, 0);
+    cannon.anchor.setTo(.5, .5);
     
-    scoreString = 'Score: ';
-    scoreText = game.add.text(10, 10, scoreString + score, {font: '34px Arial', fill: '#fff'});
-
-    game.camera.follow(player);
+    bullets = game.add.group();
+    enemyBullets = game.add.group();
+    enemies = game.add.group();
+    
+    enemy1 = enemies.create(576, 320, 'turretW');
+    game.physics.enable(enemy1, Phaser.Physics.ARCADE);
+    enemy1.body.allowGravity = false;
+    
+    enemy2 = enemies.create(352, 320, 'turretF');
+    game.physics.enable(enemy2, Phaser.Physics.ARCADE);
+    enemy2.body.allowGravity = false;
+    
+    enemy3 = enemies.create(64, 512, 'turretF');
+    game.physics.enable(enemy3, Phaser.Physics.ARCADE);
+    enemy3.body.allowGravity = false;
+    
+    shootSFX = game.add.audio('shot');
+    hitSFX = game.add.audio('hit');
+    music = game.add.audio('music');
+    music.loop = true;
+    music.play();
+    
+    stateText = game.add.text(200, 200, "Press Enter to play!", {font: '34px Arial', fill: '#000'});
+    healthText = game.add.text(32, 32, "Health: " + playerHealth, {font: '34px Arial', fill: '#000'});
 
     cursors = game.input.keyboard.createCursorKeys();
-    jumpButton = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
-
+    shootButton = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
+    upGrav = game.input.keyboard.addKey(Phaser.Keyboard.W);
+    downGrav = game.input.keyboard.addKey(Phaser.Keyboard.S);
+    leftGrav = game.input.keyboard.addKey(Phaser.Keyboard.A);
+    rightGrav = game.input.keyboard.addKey(Phaser.Keyboard.D);
+    turnCW = game.input.keyboard.addKey(Phaser.Keyboard.E);
+    turnCCW = game.input.keyboard.addKey(Phaser.Keyboard.Q);
+    startKey = game.input.keyboard.addKey(Phaser.Keyboard.ENTER);
 }
 
 function update() {
 
-    game.physics.arcade.collide(player, floor);
-
-    player.body.velocity.x = 0;
-
-    if (cursors.left.isDown)
-    {
-        player.body.velocity.x = -150;
-
-        //if (facing != 'left')
-        //{
-            if(g_dir == 'down')
-                player.animations.play('left');
-            else
-                player.animations.play('left_up');
-            facing = 'left';
-        //}
-    }
-    else if (cursors.right.isDown)
-    {
-        player.body.velocity.x = 150;
-
-        //if (facing != 'right')
-        //{
-            if(g_dir == 'down')
-                player.animations.play('right');
-            else
-                player.animations.play('right_up');
-            facing = 'right';
-        //}
-    }
-    else
-    {
-        //if (facing != 'idle')
-        //{
-            player.animations.stop();
-
-            if (facing == 'left')
-            {
-                if(g_dir == 'down')
-                    player.frame = 2;
-                else
-                    player.frame = 6;
-            }
-            else if(facing == 'right')
-            {
-                if(g_dir == 'down')
-                    player.frame = 0;
-                else
-                    player.frame = 4;
-            }
-
-            facing = 'idle';
-        //}
-    }
+    game.physics.arcade.collide(player, layer);
     
-    if (jumpButton.isDown && game.time.now > jumpTimer)
+    cannon.body.x = player.body.x;
+    cannon.body.y = player.body.y;
+    
+    healthText.text = "Health: " + playerHealth;
+    
+    if(isRunning && player.alive)
     {
-        //player.body.velocity.y = -250;
-        game.physics.arcade.gravity.y *= -1;
-        if (g_dir == 'down')//if gravity is acting downwards, set gravity to 'up'//
+        if(g_dir == 'down' || g_dir == 'up')
         {
+            if(player.body.velocity.y == 0)
+            {
+                player.body.velocity.x = 0;
+                onGround = true;
+            }
+        
+            else
+                onGround = false;
+        }
+    
+        if(g_dir == 'left' || g_dir == 'right')
+        {
+            if(player.body.velocity.x == 0)
+            {
+                player.body.velocity.y = 0;
+                onGround = true;
+            }
+        
+            else
+                onGround = false;
+        }
+
+        if (cursors.left.isDown && (g_dir == 'down' || g_dir == 'up') && onGround)
+        {
+            player.body.velocity.x = -150;
+        }
+        else if (cursors.right.isDown && (g_dir == 'down' || g_dir == 'up') && onGround)
+        {
+            player.body.velocity.x = 150;
+        }
+        else if(cursors.up.isDown && (g_dir == 'left' || g_dir == 'right') && onGround)
+        {
+            player.body.velocity.y = -150;
+        }
+        else if(cursors.down.isDown && (g_dir == 'left' || g_dir == 'right') && onGround)
+        {
+            player.body.velocity.y = 150;
+        }
+    
+        if(upGrav.isDown && onGround)
+        {
+            game.physics.arcade.gravity.x = 0;
+            game.physics.arcade.gravity.y = -250;
             g_dir = 'up';
         }
-        else
+    
+        else if(downGrav.isDown && onGround)
         {
+            game.physics.arcade.gravity.x = 0;
+            game.physics.arcade.gravity.y = 250;
             g_dir = 'down';
         }
-        gSound.play('gSwitch');
-        jumpTimer = game.time.now + 750;
+    
+        else if(leftGrav.isDown && onGround)
+        {
+            game.physics.arcade.gravity.x = -250;
+            game.physics.arcade.gravity.y = 0;
+            g_dir = 'left';
+        }
+    
+        else if(rightGrav.isDown && onGround)
+        {
+            game.physics.arcade.gravity.x = 250;
+            game.physics.arcade.gravity.y = 0;
+            g_dir = 'right';
+        }
+    
+        if(turnCW.isDown)
+        {
+            cannon.angle += 2.5;
+        }
+    
+        else if(turnCCW.isDown)
+        {
+            cannon.angle -= 2.5;
+        }
+    
+        if(shootButton.isDown && game.time.now > bulletTimer)
+        {
+            shoot();
+            bulletTimer = game.time.now + 500;
+        }
+        
+        if(game.time.now >= enemyTimer && (enemy1.alive || enemy2.alive || enemy3.alive))
+        {
+            enemyShoot();
+            enemyTimer = game.time.now + 2500;
+        }
+        
     }
     
-    //Check for and handles coin collisions//
-    game.physics.arcade.overlap(player, coins, coinCollision, null, this);
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//function createCoins(): spawns 15 coins to random coordinates with random bounce (coins will share the players gravity).  //
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-function createCoins()
-{
-    for(var i = 0; i < 15; i++)
+    if(playerHealth <= 0)
     {
-        var coin = coins.create((Math.random() * 600) + 1, 16, 'coin');
-        game.physics.enable(coin, Phaser.Physics.ARCADE);
-        coin.body.bounce.y = 1;
-        coin.body.setSize(16, 16, 0, 0);
-        coin.body.collideWorldBounds = true;
+        isRunning = false;
+        player.kill();
+        cannon.kill();
+        stateText.text = "Game Over! Enter to restart.";
+        stateText.visible = true;
     }
+    
+    if(startKey.isDown)
+    {
+        if(!isRunning)
+        {
+            enemyTimer = game.time.now + 1000;   
+            playerHealth = 3;
+            game.physics.arcade.gravity.y = 250;
+            game.physics.arcade.gravity.x = 0;
+            player.reset(32, 96);
+            cannon.reset(32, 96);
+            enemy1.reset(576, 320);
+            enemy2.reset(352, 320);
+            enemy3.reset(64, 512);
+        }
+        isRunning = true;
+        stateText.visible = false;
+    }
+    
+    game.physics.arcade.overlap(bullets, layer, wallCollision, null, this);
+    game.physics.arcade.overlap(enemyBullets, layer, wallCollision, null, this);
+    game.physics.arcade.overlap(player, enemyBullets, playerHit, null, this);
+    game.physics.arcade.overlap(bullets, enemies, enemyHit, null, this);
 }
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////
-//function coinCollision(coin, player)                                                                 //
-//destroys the coin and adds 100 to the score. Spawns another coin with random bounce and x-coordinates//
-/////////////////////////////////////////////////////////////////////////////////////////////////////////
-function coinCollision(player, coin)
+        
+function shoot()
 {
-    coin.kill();
-    
-    coinSound.play('coinGet');
-    score += 100;
-    scoreText.text = scoreString + score;
-    
-    var newCoin = coins.create((Math.random() * 600) + 1, 16, 'coin');
-    game.physics.enable(newCoin, Phaser.Physics.ARCADE);
-    newCoin.body.bounce.y = 1;
-    newCoin.body.setSize(16, 16, 0, 0);
-    newCoin.body.collideWorldBounds = true;
+    var bullet = bullets.create(player.body.x + 16, player.body.y + 16, 'bullet');
+    game.physics.enable(bullet, Phaser.Physics.ARCADE);
+    bullet.body.setSize(8, 8, 0, 0);
+    bullet.anchor.setTo(.5, .5)
+    bullet.rotation = cannon.rotation;
+    bullet.body.allowGravity = false;
+    game.physics.arcade.velocityFromRotation(cannon.rotation, 400, bullet.body.velocity);
+    shootSFX.play();
 }
-
-function render () {
-
-    // game.debug.text(game.time.physicsElapsed, 32, 32);
-    // game.debug.body(player);
-    // game.debug.bodyInfo(player, 16, 24);
-
+        
+function wallCollision(bullet, layer)
+{
+    bullet.kill();
 }
+        
+function enemyShoot()
+{
+    if(enemy1.alive)
+    {
+        var bullet = enemyBullets.create(enemy1.body.x + 16, enemy1.body.y + 16, 'bullet');
+        game.physics.enable(bullet, Phaser.Physics.ARCADE);
+        bullet.body.setSize(8, 8, 0, 0);
+        bullet.anchor.setTo(.5, .5);
+        bullet.body.allowGravity = false;
+        game.physics.arcade.moveToObject(bullet, player, 400);
+    }
+    
+    if(enemy2.alive)
+    {
+        var bullet = enemyBullets.create(enemy2.body.x + 16, enemy2.body.y + 16, 'bullet');
+        game.physics.enable(bullet, Phaser.Physics.ARCADE);
+        bullet.body.setSize(8, 8, 0, 0);
+        bullet.anchor.setTo(.5, .5);
+        bullet.body.allowGravity = false;
+        game.physics.arcade.moveToObject(bullet, player, 400);
+    }
+    
+    if(enemy3.alive)
+    {
+        var bullet = enemyBullets.create(enemy3.body.x + 16, enemy3.body.y + 16, 'bullet');
+        game.physics.enable(bullet, Phaser.Physics.ARCADE);
+        bullet.body.setSize(8, 8, 0, 0);
+        bullet.anchor.setTo(.5, .5);
+        bullet.body.allowGravity = false;
+        game.physics.arcade.moveToObject(bullet, player, 400);
+    }
+    
+    shootSFX.play();
+}
+        
+function playerHit(player, bullet)
+{
+    hitSFX.play();
+    bullet.kill();
+    if(playerHealth > 0)
+        playerHealth--;
+}
+        
+function enemyHit(bullet, enemy)
+{
+    hitSFX.play();
+    bullet.kill();
+    enemy.kill();
+}
+        
+function render() {}
+
 
     };
